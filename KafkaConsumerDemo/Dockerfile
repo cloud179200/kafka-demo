@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
 # Copy the project file and restore dependencies
-COPY KafkaProducerDemo.csproj ./
+COPY KafkaConsumerDemo.csproj ./
 RUN dotnet restore
 
 # Copy the rest of the application source code
@@ -16,4 +16,4 @@ RUN dotnet publish -c Release -o /out
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 COPY --from=build /out .
-ENTRYPOINT ["dotnet", "KafkaProducerDemo.dll"]
+ENTRYPOINT ["dotnet", "KafkaConsumerDemo.dll"]

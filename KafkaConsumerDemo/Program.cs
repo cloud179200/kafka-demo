@@ -1,4 +1,4 @@
-using KafkaProducerDemo.Services;
+using KafkaConsumerDemo.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,8 +7,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Register Kafka producer service
-builder.Services.AddSingleton<KafkaProducerService>();
+// Register MongoDB and Kafka consumer services
+builder.Services.AddSingleton<MongoDbService>();
+builder.Services.AddHostedService<KafkaConsumerService>();
 
 var app = builder.Build();
 

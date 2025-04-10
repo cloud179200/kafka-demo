@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 5002
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 5002:5002
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 5001:5001
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:5002
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:5001,PLAINTEXT_HOST://localhost:5002
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 60000
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 5003:5003
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:5001
+    depends_on:
+      - kafka
+
+  kafka-producer-demo:
+    build:
+      context: ./KafkaProducerDemo
+      dockerfile: Dockerfile
+    ports:
+      - 5004:5004
+    depends_on:
+      - kafka
+
+  kafka-consumer-demo:
+    build:
+      context: ./KafkaConsumerDemo
+      dockerfile: Dockerfile
+    ports:
+      - 5005:5005
+    depends_on:
+      - kafka
+      - mongo
+
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    ports:
+      - 27017:27017
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example

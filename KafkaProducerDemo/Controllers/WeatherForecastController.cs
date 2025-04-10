@@ -1,3 +1,4 @@
+using KafkaProducerDemo.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace KafkaProducerDemo.Controllers
@@ -6,28 +7,19 @@ namespace KafkaProducerDemo.Controllers
     [Route("[controller]")]
     public class WeatherForecastController : ControllerBase
     {
-        private static readonly string[] Summaries = new[]
-        {
-            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-        };
+        private readonly KafkaProducerService _kafkaProducerService;
 
-        private readonly ILogger<WeatherForecastController> _logger;
-
-        public WeatherForecastController(ILogger<WeatherForecastController> logger)
+        public WeatherForecastController(KafkaProducerService kafkaProducerService)
         {
-            _logger = logger;
+            _kafkaProducerService = kafkaProducerService;
         }
 
-        [HttpGet(Name = "GetWeatherForecast")]
-        public IEnumerable<WeatherForecast> Get()
+        [HttpPost("send")]
+        public async Task<IActionResult> SendMessage([FromBody] string message)
         {
-            return Enumerable.Range(1, 5).Select(index => new WeatherForecast
-            {
-                Date = DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-                TemperatureC = Random.Shared.Next(-20, 55),
-                Summary = Summaries[Random.Shared.Next(Summaries.Length)]
-            })
-            .ToArray();
+            var key = Guid.NewGuid().ToString(); // Generate a unique key for the message
+            await _kafkaProducerService.SendMessageAsync(key, message);
+            return Ok("Message sent to Kafka.");
         }
     }
 }
