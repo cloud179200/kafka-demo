@@ -92,6 +92,25 @@ services:
       MYSQL_CONNECTION_STRING: "Server=mysql1;Port=3306;Database=db1;User=user1;Password=password1;"
     networks:
       - kafka-net
+  kafka-consumer-demo-rep-1:
+    build:
+      context: ./KafkaConsumerDemo
+      dockerfile: Dockerfile
+    depends_on:
+      - kafka
+      - postgres2
+      - mysql1
+    ports:
+      - 5004:5004
+    environment:
+      ASPNETCORE_URLS: "http://+:5004"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: order_payment_topic
+      KAFKA_GROUP_ID: consumer-group-1
+      POSTGRES_CONNECTION_STRING: "Host=postgres2;Port=5432;Username=user2;Password=password2;Database=db2"
+      MYSQL_CONNECTION_STRING: "Server=mysql1;Port=3306;Database=db1;User=user1;Password=password1;"
+    networks:
+      - kafka-net
 
   kafka-consumer-demo-2:
     build:
@@ -182,6 +201,17 @@ services:
       MYSQL_PASSWORD: password2
     volumes:
       - mysql2-data:/var/lib/mysql
+    networks:
+      - kafka-net
+
+  kafka-next-data-demo:
+    build:
+      context: ./kafka-next-data-demo
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
+    depends_on:
+      - kafka
     networks:
       - kafka-net
 

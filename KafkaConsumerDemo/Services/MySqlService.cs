@@ -19,7 +19,7 @@ namespace KafkaConsumerDemo.Services
 
       // Insert into orders table
       var insertOrderQuery = @"
-                INSERT INTO orders (order_id, customer_id, order_date, total_amount, order_state)
+                INSERT INTO orders (order_id, customer_id, order_date, total_amount, state)
                 VALUES (@orderId, @customerId, @orderDate, @totalAmount, @orderState)
                 ON DUPLICATE KEY UPDATE order_id = order_id;";
 
@@ -35,7 +35,7 @@ namespace KafkaConsumerDemo.Services
       if (record.PaymentId.HasValue)
       {
         var insertPaymentQuery = @"
-                    INSERT INTO payments (payment_id, order_id, payment_date, payment_amount, payment_method, payment_state)
+                    INSERT INTO payments (payment_id, order_id, payment_date, payment_amount, payment_method, state)
                     VALUES (@paymentId, @orderId, @paymentDate, @paymentAmount, @paymentMethod, @paymentState)
                     ON DUPLICATE KEY UPDATE payment_id = payment_id;";
 
@@ -64,13 +64,13 @@ namespace KafkaConsumerDemo.Services
       {
         // Insert all orders in a single batch
         var insertOrdersQuery = @"
-            INSERT INTO orders (order_id, customer_id, order_date, total_amount, order_state)
+            INSERT INTO orders (order_id, customer_id, order_date, total_amount, state)
             VALUES " + string.Join(", ", records.Select((_, i) => $"(@orderId{i}, @customerId{i}, @orderDate{i}, @totalAmount{i}, @orderState{i})")) + @"
             ON DUPLICATE KEY UPDATE 
                 customer_id = VALUES(customer_id),
                 order_date = VALUES(order_date),
                 total_amount = VALUES(total_amount),
-                order_state = VALUES(order_state);";
+                state = VALUES(state);";
 
         await using var orderCommand = new MySqlCommand(insertOrdersQuery, connection, transaction);
         for (var i = 0; i < records.Count; i++)
@@ -88,14 +88,14 @@ namespace KafkaConsumerDemo.Services
         if (paymentRecords.Count > 0)
         {
           var insertPaymentsQuery = @"
-                INSERT INTO payments (payment_id, order_id, payment_date, payment_amount, payment_method, payment_state)
+                INSERT INTO payments (payment_id, order_id, payment_date, payment_amount, payment_method, state)
                 VALUES " + string.Join(", ", paymentRecords.Select((_, i) => $"(@paymentId{i}, @orderId{i}, @paymentDate{i}, @paymentAmount{i}, @paymentMethod{i}, @paymentState{i})")) + @"
                 ON DUPLICATE KEY UPDATE 
                     order_id = VALUES(order_id),
                     payment_date = VALUES(payment_date),
                     payment_amount = VALUES(payment_amount),
                     payment_method = VALUES(payment_method),
-                    payment_state = VALUES(payment_state);";
+                    state = VALUES(state);";
 
           await using var paymentCommand = new MySqlCommand(insertPaymentsQuery, connection, transaction);
           for (var i = 0; i < paymentRecords.Count; i++)
