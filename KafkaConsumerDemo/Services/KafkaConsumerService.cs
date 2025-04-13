@@ -1,58 +1,92 @@
 ﻿using Confluent.Kafka;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using KafkaConsumerDemo.Services;
 
 namespace KafkaConsumerDemo.Services
 {
     public class KafkaConsumerService : BackgroundService
     {
         private readonly ILogger<KafkaConsumerService> _logger;
-        private readonly MongoDbService _mongoDbService;
-        private readonly string _bootstrapServers;
-        private readonly string _groupId;
+        private readonly PostgreSqlService _postgreSqlService;
+        private readonly ConsumerConfig _consumerConfig;
         private readonly string _topic;
 
-        public KafkaConsumerService(ILogger<KafkaConsumerService> logger, MongoDbService mongoDbService, IConfiguration configuration)
+        public KafkaConsumerService(
+            ILogger<KafkaConsumerService> logger,
+            PostgreSqlService postgreSqlService,
+            IConfiguration configuration)
         {
             _logger = logger;
-            _mongoDbService = mongoDbService;
-            _bootstrapServers = configuration["Kafka:BootstrapServers"];
-            _groupId = configuration["Kafka:GroupId"];
-            _topic = configuration["Kafka:Topic"];
+            _postgreSqlService = postgreSqlService;
+
+            _topic = configuration["Kafka:Topic"] ?? throw new ArgumentNullException("Kafka:Topic");
+            _consumerConfig = new ConsumerConfig
+            {
+                BootstrapServers = configuration["Kafka:BootstrapServers"] ?? throw new ArgumentNullException("Kafka:BootstrapServers"),
+                GroupId = configuration["Kafka:GroupId"] ?? throw new ArgumentNullException("Kafka:GroupId"),
+                AutoOffsetReset = AutoOffsetReset.Earliest,
+                EnableAutoCommit = true
+            };
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var config = new ConsumerConfig
+            while (!stoppingToken.IsCancellationRequested)
             {
-                BootstrapServers = _bootstrapServers,
-                GroupId = _groupId,
-                AutoOffsetReset = AutoOffsetReset.Earliest
-            };
+                using var consumer = new ConsumerBuilder<Ignore, string>(_consumerConfig)
+                    .SetPartitionsAssignedHandler((c, partitions) =>
+                        _logger.LogInformation($"Partitions assigned: [{string.Join(", ", partitions)}]"))
+                    .SetPartitionsRevokedHandler((c, partitions) =>
+                        _logger.LogWarning("Partitions revoked."))
+                    .Build();
 
-            using var consumer = new ConsumerBuilder<Ignore, string>(config).Build();
-            consumer.Subscribe(_topic);
+                consumer.Subscribe(_topic);
+                _logger.LogInformation("Subscribed to topic: {Topic}", _topic);
 
-            try
-            {
-                while (!stoppingToken.IsCancellationRequested)
+                try
                 {
-                    var result = consumer.Consume(stoppingToken);
-                    var logMessage = $"Received message: {result.Message.Value} at {DateTime.UtcNow}";
+                    while (!stoppingToken.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            var result = consumer.Consume(stoppingToken);
+                            var message = result.Message?.Value;
 
-                    _logger.LogInformation(logMessage);
+                            if (!string.IsNullOrWhiteSpace(message))
+                            {
+                                var logMessage = $"Received message: {message} at {DateTime.UtcNow}";
+                                _logger.LogInformation(logMessage);
 
-                    // Save the log to MongoDB
-                    await _mongoDbService.SaveLogAsync(logMessage);
+                                // Save the log message to PostgreSQL
+                                await _postgreSqlService.SaveLogAsync(logMessage);
+                            }
+                        }
+                        catch (ConsumeException ex)
+                        {
+                            _logger.LogError(ex, $"Consume error: {ex.Error.Reason}");
+                        }
+                    }
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogInformation("Consumer stopped.");
-            }
-            finally
-            {
-                consumer.Close();
+                catch (OperationCanceledException)
+                {
+                    _logger.LogInformation("Consumer cancellation requested.");
+                }
+                catch (KafkaException ex)
+                {
+                    _logger.LogError(ex, "Kafka error occurred. Retrying in 5 seconds...");
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unexpected error occurred. Retrying in 5 seconds...");
+                    await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+                }
+                finally
+                {
+                    consumer.Close();
+                    _logger.LogInformation("Consumer closed.");
+                }
             }
         }
     }

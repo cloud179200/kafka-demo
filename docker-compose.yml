@@ -32,6 +32,17 @@ services:
     networks:
       - kafka-net
 
+  kafdrop:
+    image: obsidiandynamics/kafdrop
+    ports:
+      - 9000:9000
+    environment:
+      KAFKA_BROKERCONNECT: kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - kafka-net
+
   kafka-producer-demo:
     build:
       context: ./KafkaProducerDemo
@@ -53,7 +64,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - kafka
-      - mongo
+      - postgres1
     ports:
       - 5001:5001 # Map host port 5001 to container port 5001
     environment:
@@ -63,25 +74,75 @@ services:
     networks:
       - kafka-net
 
-  mongo:
-    image: mongo:latest
-    container_name: mongo
+  postgres1:
+    image: postgres:latest
+    container_name: postgres1
     ports:
-      - 27017:27017
+      - 5432:5432
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
+      POSTGRES_USER: user1
+      POSTGRES_PASSWORD: password1
+      POSTGRES_DB: db1
+    volumes:
+      - postgres1-data:/var/lib/postgresql/data
     networks:
       - kafka-net
 
-  kafdrop:
-    image: obsidiandynamics/kafdrop
+  postgres2:
+    image: postgres:latest
+    container_name: postgres2
     ports:
-      - 9000:9000
+      - 5433:5432
     environment:
-      KAFKA_BROKERCONNECT: kafka:29092
-    depends_on:
-      - kafka
+      POSTGRES_USER: user2
+      POSTGRES_PASSWORD: password2
+      POSTGRES_DB: db2
+    volumes:
+      - postgres2-data:/var/lib/postgresql/data
+    networks:
+      - kafka-net
+
+  postgres3:
+    image: postgres:latest
+    container_name: postgres3
+    ports:
+      - 5434:5432
+    environment:
+      POSTGRES_USER: user3
+      POSTGRES_PASSWORD: password3
+      POSTGRES_DB: db3
+    volumes:
+      - postgres3-data:/var/lib/postgresql/data
+    networks:
+      - kafka-net
+
+  mysql1:
+    image: mysql:latest
+    container_name: mysql1
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword1
+      MYSQL_DATABASE: db1
+      MYSQL_USER: user1
+      MYSQL_PASSWORD: password1
+    volumes:
+      - mysql1-data:/var/lib/mysql
+    networks:
+      - kafka-net
+
+  mysql2:
+    image: mysql:latest
+    container_name: mysql2
+    ports:
+      - 3307:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword2
+      MYSQL_DATABASE: db2
+      MYSQL_USER: user2
+      MYSQL_PASSWORD: password2
+    volumes:
+      - mysql2-data:/var/lib/mysql
     networks:
       - kafka-net
 
@@ -93,4 +154,8 @@ volumes:
   zookeeper-data:
   zookeeper-log:
   kafka-data:
-  mongo-data:
+  postgres1-data:
+  postgres2-data:
+  postgres3-data:
+  mysql1-data:
+  mysql2-data:
