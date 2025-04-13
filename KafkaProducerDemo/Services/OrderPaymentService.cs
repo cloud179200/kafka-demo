@@ -17,7 +17,7 @@ namespace KafkaProducerDemo.Services
     private readonly string _mySqlConnectionString2;
     private readonly string _topic = "order_payment_topic";
     private readonly int _offsetStart;
-    private readonly int _comparedBatchSize = 20000;
+    private readonly int _comparedBatchSize = 40000;
     public OrderPaymentService(IConfiguration configuration, KafkaProducerService kafkaProducerService, ILogger<OrderPaymentService> logger)
     {
       _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -49,7 +49,7 @@ namespace KafkaProducerDemo.Services
         Console.WriteLine($"Success count: {_kafkaProducerService.GetSuccessCount()}");
         Console.WriteLine($"Failed count: {_kafkaProducerService.GetFailedCount()}");
         totalRecords += records.Count;
-        if (totalRecords >= 20000)
+        if (totalRecords >= _comparedBatchSize)
         {
           Console.WriteLine($"Processed {totalRecords} records. Stop here.");
           break;

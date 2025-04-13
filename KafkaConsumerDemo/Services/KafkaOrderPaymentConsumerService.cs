@@ -31,7 +31,7 @@ namespace KafkaConsumerDemo.Services
         BootstrapServers = configuration["Kafka:BootstrapServers"] ?? throw new ArgumentNullException("Kafka:BootstrapServers"),
         GroupId = configuration["KAFKA_GROUP_ID"] ?? throw new ArgumentNullException("KAFKA_GROUP_ID"),
         AutoOffsetReset = AutoOffsetReset.Earliest,
-        EnableAutoCommit = true
+        EnableAutoCommit = false
       };
       _postgreSqlService = postgreSqlService ?? throw new ArgumentNullException(nameof(postgreSqlService));
       _mySqlService = mySqlService ?? throw new ArgumentNullException(nameof(mySqlService));
@@ -62,23 +62,16 @@ namespace KafkaConsumerDemo.Services
                 if (record != null)
                 {
                   _batchRecords.Add(record);
+                  consumer.Commit(result);
                   _logger.LogInformation("Added record to batch: {OrderId}", record.OrderId);
                 }
               }
-            }
-            catch (JsonException ex)
-            {
-              _logger.LogError(ex, "Failed to deserialize message.");
             }
             catch (Exception ex)
             {
               _logger.LogError(ex, "An error occurred while processing the message.");
             }
           }
-        }
-        catch (OperationCanceledException)
-        {
-          _logger.LogInformation("Consumer operation was canceled.");
         }
         catch (Exception ex)
         {

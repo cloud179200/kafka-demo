@@ -19,7 +19,8 @@ namespace KafkaProducerDemo.Services
         {
             var config = new ProducerConfig
             {
-                BootstrapServers = _bootstrapServers
+                BootstrapServers = _bootstrapServers,
+                Acks = Acks.All
             };
 
             try
@@ -32,11 +33,6 @@ namespace KafkaProducerDemo.Services
                 });
                 _successCount++;
                 Console.WriteLine($"Message sent to topic {result.Topic}, partition {result.Partition}, offset {result.Offset}");
-            }
-            catch (Exception ex) when (ex is ProduceException<string, string> || ex is KafkaException)
-            {
-                _failedCount++;
-                Console.WriteLine($"Error producing message: {ex.Message}");
             }
             catch (Exception ex)
             {
