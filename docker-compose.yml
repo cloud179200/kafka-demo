@@ -50,11 +50,26 @@ services:
     depends_on:
       - kafka
     ports:
-      - 5000:5000 # Map host port 5000 to container port 5000
+      - 5000:5000
     environment:
       ASPNETCORE_URLS: "http://+:5000"
-      # Point to Kafka using the internal network alias
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      OFFSET_START: 0
+    networks:
+      - kafka-net
+
+  kafka-producer-demo-2:
+    build:
+      context: ./KafkaProducerDemo
+      dockerfile: Dockerfile
+    depends_on:
+      - kafka
+    ports:
+      - 5001:5001
+    environment:
+      ASPNETCORE_URLS: "http://+:5001"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      OFFSET_START: 5000000
     networks:
       - kafka-net
 
@@ -64,13 +79,37 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - kafka
-      - postgres1
+      - postgres2
+      - mysql1
     ports:
-      - 5001:5001 # Map host port 5001 to container port 5001
+      - 5002:5002
     environment:
-      ASPNETCORE_URLS: "http://+:5001"
-      # Point to Kafka using the internal network alias
+      ASPNETCORE_URLS: "http://+:5002"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: order_payment_topic
+      KAFKA_GROUP_ID: consumer-group-1
+      POSTGRES_CONNECTION_STRING: "Host=postgres2;Port=5432;Username=user2;Password=password2;Database=db2"
+      MYSQL_CONNECTION_STRING: "Server=mysql1;Port=3306;Database=db1;User=user1;Password=password1;"
+    networks:
+      - kafka-net
+
+  kafka-consumer-demo-2:
+    build:
+      context: ./KafkaConsumerDemo
+      dockerfile: Dockerfile
+    depends_on:
+      - kafka
+      - postgres3
+      - mysql2
+    ports:
+      - 5003:5003
+    environment:
+      ASPNETCORE_URLS: "http://+:5003"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC: order_payment_topic
+      KAFKA_GROUP_ID: consumer-group-2
+      POSTGRES_CONNECTION_STRING: "Host=postgres3;Port=5432;Username=user3;Password=password3;Database=db3"
+      MYSQL_CONNECTION_STRING: "Server=mysql2;Port=3306;Database=db2;User=user2;Password=password2;"
     networks:
       - kafka-net
 

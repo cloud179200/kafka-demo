@@ -8,8 +8,10 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // Register MongoDB and Kafka consumer services
-builder.Services.AddSingleton<PostgreSqlService>();
-builder.Services.AddHostedService<KafkaConsumerService>();
+// builder.Services.AddHostedService<KafkaConsumerService>();
+builder.Services.AddHostedService<KafkaOrderPaymentConsumerService>();
+builder.Services.AddTransient<PostgresSqlService>();
+builder.Services.AddTransient<MySqlService>();
 
 var app = builder.Build();
 

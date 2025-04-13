@@ -1,25 +1,21 @@
 ﻿using Confluent.Kafka;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using KafkaConsumerDemo.Services;
 
 namespace KafkaConsumerDemo.Services
 {
     public class KafkaConsumerService : BackgroundService
     {
         private readonly ILogger<KafkaConsumerService> _logger;
-        private readonly PostgreSqlService _postgreSqlService;
+        private readonly PostgresSqlService _postgreSqlService;
         private readonly ConsumerConfig _consumerConfig;
         private readonly string _topic;
 
         public KafkaConsumerService(
             ILogger<KafkaConsumerService> logger,
-            PostgreSqlService postgreSqlService,
+            PostgresSqlService postgreSqlService,
             IConfiguration configuration)
         {
             _logger = logger;
             _postgreSqlService = postgreSqlService;
-
             _topic = configuration["Kafka:Topic"] ?? throw new ArgumentNullException("Kafka:Topic");
             _consumerConfig = new ConsumerConfig
             {

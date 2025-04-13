@@ -1,61 +1,29 @@
 using KafkaConsumerDemo.StandardizeModels;
-using Npgsql;
+using MySql.Data.MySqlClient;
 
 namespace KafkaConsumerDemo.Services
 {
-  public class PostgresSqlService
+  public class MySqlService
   {
     private readonly string _connectionString;
 
-    public PostgresSqlService(IConfiguration configuration)
+    public MySqlService(IConfiguration configuration)
     {
-      _connectionString = configuration.GetSection("POSTGRES_CONNECTION_STRING").Value ?? throw new ArgumentNullException("POSTGRES_CONNECTION_STRING", "PostgreSQL connection string is not configured.");
-    }
-
-    public async Task<List<string>> GetTableNamesAsync()
-    {
-      var tableNames = new List<string>();
-
-      await using var connection = new NpgsqlConnection(_connectionString);
-      await connection.OpenAsync();
-
-      var query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';";
-      await using var command = new NpgsqlCommand(query, connection);
-      await using var reader = await command.ExecuteReaderAsync();
-
-      while (await reader.ReadAsync())
-      {
-        tableNames.Add(reader.GetString(0));
-      }
-
-      return tableNames;
-    }
-
-    public async Task SaveLogAsync(string logMessage)
-    {
-      await using var connection = new NpgsqlConnection(_connectionString);
-      await connection.OpenAsync();
-
-      var query = "INSERT INTO logs (message, created_at) VALUES (@message, @createdAt)";
-      await using var command = new NpgsqlCommand(query, connection);
-      command.Parameters.AddWithValue("message", logMessage);
-      command.Parameters.AddWithValue("createdAt", DateTime.UtcNow);
-
-      await command.ExecuteNonQueryAsync();
+      _connectionString = configuration.GetSection("MYSQL_CONNECTION_STRING").Value ?? throw new ArgumentNullException("MYSQL_CONNECTION_STRING", "MySQL connection string is not configured.");
     }
 
     public async Task InsertOrderPaymentAsync(OrderPaymentRecord record)
     {
-      await using var connection = new NpgsqlConnection(_connectionString);
+      await using var connection = new MySqlConnection(_connectionString);
       await connection.OpenAsync();
 
       // Insert into orders table
       var insertOrderQuery = @"
                 INSERT INTO orders (order_id, customer_id, order_date, total_amount, order_state)
                 VALUES (@orderId, @customerId, @orderDate, @totalAmount, @orderState)
-                ON CONFLICT (order_id) DO NOTHING;";
+                ON DUPLICATE KEY UPDATE order_id = order_id;";
 
-      await using var orderCommand = new NpgsqlCommand(insertOrderQuery, connection);
+      await using var orderCommand = new MySqlCommand(insertOrderQuery, connection);
       orderCommand.Parameters.AddWithValue("orderId", record.OrderId);
       orderCommand.Parameters.AddWithValue("customerId", record.CustomerId);
       orderCommand.Parameters.AddWithValue("orderDate", record.OrderDate);
@@ -69,9 +37,9 @@ namespace KafkaConsumerDemo.Services
         var insertPaymentQuery = @"
                     INSERT INTO payments (payment_id, order_id, payment_date, payment_amount, payment_method, payment_state)
                     VALUES (@paymentId, @orderId, @paymentDate, @paymentAmount, @paymentMethod, @paymentState)
-                    ON CONFLICT (payment_id) DO NOTHING;";
+                    ON DUPLICATE KEY UPDATE payment_id = payment_id;";
 
-        await using var paymentCommand = new NpgsqlCommand(insertPaymentQuery, connection);
+        await using var paymentCommand = new MySqlCommand(insertPaymentQuery, connection);
         paymentCommand.Parameters.AddWithValue("paymentId", record.PaymentId.Value);
         paymentCommand.Parameters.AddWithValue("orderId", record.OrderId);
         paymentCommand.Parameters.AddWithValue("paymentDate", record.PaymentDate ?? (object)DBNull.Value);
@@ -81,12 +49,13 @@ namespace KafkaConsumerDemo.Services
         await paymentCommand.ExecuteNonQueryAsync();
       }
     }
+
     public async Task InsertOrderPaymentsAsync(List<OrderPaymentRecord> records)
     {
       if (records == null || records.Count == 0)
         return;
 
-      await using var connection = new NpgsqlConnection(_connectionString);
+      await using var connection = new MySqlConnection(_connectionString);
       await connection.OpenAsync();
 
       await using var transaction = await connection.BeginTransactionAsync();
@@ -97,9 +66,13 @@ namespace KafkaConsumerDemo.Services
         var insertOrdersQuery = @"
             INSERT INTO orders (order_id, customer_id, order_date, total_amount, order_state)
             VALUES " + string.Join(", ", records.Select((_, i) => $"(@orderId{i}, @customerId{i}, @orderDate{i}, @totalAmount{i}, @orderState{i})")) + @"
-            ON CONFLICT (order_id) DO NOTHING;";
+            ON DUPLICATE KEY UPDATE 
+                customer_id = VALUES(customer_id),
+                order_date = VALUES(order_date),
+                total_amount = VALUES(total_amount),
+                order_state = VALUES(order_state);";
 
-        await using var orderCommand = new NpgsqlCommand(insertOrdersQuery, connection, transaction);
+        await using var orderCommand = new MySqlCommand(insertOrdersQuery, connection, transaction);
         for (var i = 0; i < records.Count; i++)
         {
           orderCommand.Parameters.AddWithValue($"orderId{i}", records[i].OrderId);
@@ -117,9 +90,14 @@ namespace KafkaConsumerDemo.Services
           var insertPaymentsQuery = @"
                 INSERT INTO payments (payment_id, order_id, payment_date, payment_amount, payment_method, payment_state)
                 VALUES " + string.Join(", ", paymentRecords.Select((_, i) => $"(@paymentId{i}, @orderId{i}, @paymentDate{i}, @paymentAmount{i}, @paymentMethod{i}, @paymentState{i})")) + @"
-                ON CONFLICT (payment_id) DO NOTHING;";
+                ON DUPLICATE KEY UPDATE 
+                    order_id = VALUES(order_id),
+                    payment_date = VALUES(payment_date),
+                    payment_amount = VALUES(payment_amount),
+                    payment_method = VALUES(payment_method),
+                    payment_state = VALUES(payment_state);";
 
-          await using var paymentCommand = new NpgsqlCommand(insertPaymentsQuery, connection, transaction);
+          await using var paymentCommand = new MySqlCommand(insertPaymentsQuery, connection, transaction);
           for (var i = 0; i < paymentRecords.Count; i++)
           {
             paymentCommand.Parameters.AddWithValue($"paymentId{i}", paymentRecords[i].PaymentId.Value);

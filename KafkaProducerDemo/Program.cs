@@ -9,6 +9,9 @@ builder.Services.AddSwaggerGen();
 
 // Register Kafka producer service
 builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddSingleton<OrderPaymentService>();
+builder.Services.AddSingleton<PostgreSqlService>();
+builder.Services.AddSingleton<IConfiguration>(builder.Configuration);
 
 var app = builder.Build();
 

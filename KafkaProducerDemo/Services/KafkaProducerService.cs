@@ -1,5 +1,4 @@
 ﻿using Confluent.Kafka;
-using KafkaProducerDemo.Models;
 using KafkaProducerDemo.StandardizeModels;
 using Npgsql;
 using System.Text.Json;
@@ -9,100 +8,51 @@ namespace KafkaProducerDemo.Services
     public class KafkaProducerService
     {
         private readonly string _bootstrapServers;
-        private readonly string _postgresConnectionString;
-
+        private int _successCount = 0;
+        private int _failedCount = 0;
         public KafkaProducerService(IConfiguration configuration)
         {
-            _bootstrapServers = configuration["Kafka:BootstrapServers"];
-            _postgresConnectionString = configuration["PostgreSql:ConnectionString"];
+            _bootstrapServers = configuration["Kafka:BootstrapServers"] ?? throw new ArgumentNullException("Kafka:BootstrapServers", "Kafka bootstrap servers are not configured.");
         }
 
-        public async Task SendMessageAsync(string key, string value)
+        public async Task SendToKafkaAsync(string topic, string key, string value)
         {
-            var demoTopic = "demo";
             var config = new ProducerConfig
             {
                 BootstrapServers = _bootstrapServers
             };
 
-            using var producer = new ProducerBuilder<string, string>(config).Build();
             try
             {
-                var result = await producer.ProduceAsync(demoTopic, new Message<string, string>
+                using var producer = new ProducerBuilder<string, string>(config).Build();
+                var result = await producer.ProduceAsync(topic, new Message<string, string>
                 {
                     Key = key,
                     Value = value
                 });
-
+                _successCount++;
                 Console.WriteLine($"Message sent to topic {result.Topic}, partition {result.Partition}, offset {result.Offset}");
             }
-            catch (ProduceException<string, string> ex)
+            catch (Exception ex) when (ex is ProduceException<string, string> || ex is KafkaException)
             {
-                Console.WriteLine($"Error producing message: {ex.Error.Reason}");
-                throw;
+                _failedCount++;
+                Console.WriteLine($"Error producing message: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                _failedCount++;
+                Console.WriteLine($"Unexpected error: {ex.Message}");
             }
         }
 
-        public async Task SendUserDataToKafkaAsync()
+        public int GetSuccessCount()
         {
-            var userTopic = "user_data";
-            var config = new ProducerConfig
-            {
-                BootstrapServers = _bootstrapServers
-            };
-
-            using var producer = new ProducerBuilder<string, string>(config).Build();
-
-            try
-            {
-                // Step 1: Retrieve all records from the "user" table in PostgreSQL
-                var users = await GetAllUsersFromPostgresAsync();
-
-                // Step 2: Standardize and send each record to the Kafka topic
-                foreach (var user in users)
-                {
-                    var standardizedUser = new StandardizeUserModel(user);
-                    var message = JsonSerializer.Serialize(standardizedUser);
-
-                    var result = await producer.ProduceAsync(userTopic, new Message<string, string>
-                    {
-                        Key = standardizedUser.Id.ToString(),
-                        Value = message
-                    });
-
-                    Console.WriteLine($"Message sent to topic {result.Topic}, partition {result.Partition}, offset {result.Offset}");
-                }
-            }
-            catch (ProduceException<string, string> ex)
-            {
-                Console.WriteLine($"Error producing message: {ex.Error.Reason}");
-                throw;
-            }
+            return _successCount;
         }
 
-        private async Task<List<User>> GetAllUsersFromPostgresAsync()
+        public int GetFailedCount()
         {
-            var users = new List<User>();
-
-            await using var connection = new NpgsqlConnection(_postgresConnectionString);
-            await connection.OpenAsync();
-
-            var query = "SELECT id, name, email, created_at FROM user";
-            await using var command = new NpgsqlCommand(query, connection);
-            await using var reader = await command.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
-            {
-                users.Add(new User
-                {
-                    Id = reader.GetInt32(0),
-                    Name = reader.GetString(1),
-                    Email = reader.GetString(2),
-                    CreatedAt = reader.GetDateTime(3)
-                });
-            }
-
-            return users;
+            return _failedCount;
         }
     }
 }
