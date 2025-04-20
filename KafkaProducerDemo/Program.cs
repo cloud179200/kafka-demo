@@ -1,6 +1,20 @@
 using KafkaProducerDemo.Services;
+using Serilog;
+using Serilog.Formatting.Json;
+using Serilog.Sinks.Network;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseSerilog((context, config) =>
+{
+  var logstashHost = context.Configuration["Logging:Logstash:Host"];
+  var logstashPort = context.Configuration["Logging:Logstash:Port"];
+  var logstashUri = $"tcp://{logstashHost}:{logstashPort}";
+
+  config.Enrich.FromLogContext()
+       .WriteTo.Console()
+       .WriteTo.TCPSink(logstashUri, new JsonFormatter());
+});
 
 // Add services to the container.
 builder.Services.AddControllers();

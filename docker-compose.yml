@@ -32,12 +32,52 @@ services:
     networks:
       - kafka-net
 
+  kafka2:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 9093:9093
+      - 29093:29093
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29093,EXTERNAL://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:29093,EXTERNAL://localhost:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    volumes:
+      - kafka2-data:/var/lib/kafka/data
+    networks:
+      - kafka-net
+
+  kafka3:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - 9094:9094
+      - 29094:29094
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29094,EXTERNAL://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka3:29094,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+    volumes:
+      - kafka3-data:/var/lib/kafka/data
+    networks:
+      - kafka-net
+
   kafdrop:
     image: obsidiandynamics/kafdrop
     ports:
       - 9000:9000
     environment:
-      KAFKA_BROKERCONNECT: kafka:29092
+      KAFKA_BROKERCONNECT: kafka:29092,kafka2:29093,kafka3:29094
     depends_on:
       - kafka
     networks:
@@ -49,6 +89,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - kafka
+      - logstash
     ports:
       - 5000:5000
     environment:
@@ -64,6 +105,7 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - kafka
+      - logstash
     ports:
       - 5001:5001
     environment:
@@ -81,6 +123,7 @@ services:
       - kafka
       - postgres2
       - mysql1
+      - logstash
     ports:
       - 5002:5002
     environment:
@@ -100,6 +143,7 @@ services:
       - kafka
       - postgres2
       - mysql1
+      - logstash
     ports:
       - 5004:5004
     environment:
@@ -120,6 +164,7 @@ services:
       - kafka
       - postgres3
       - mysql2
+      - logstash
     ports:
       - 5003:5003
     environment:
@@ -215,6 +260,52 @@ services:
     networks:
       - kafka-net
 
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - 9200:9200
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - kafka-net
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.10.2
+    container_name: logstash
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5044:5044 # Logstash Beats input
+      - 4999:4999 # Logstash TCP input
+      - 9600:9600 # Logstash monitoring API
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    networks:
+      - kafka-net
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.10.2
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - 5601:5601
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - kafka-net
+
 networks:
   kafka-net:
     driver: bridge
@@ -223,8 +314,11 @@ volumes:
   zookeeper-data:
   zookeeper-log:
   kafka-data:
+  kafka2-data:
+  kafka3-data:
   postgres1-data:
   postgres2-data:
   postgres3-data:
   mysql1-data:
   mysql2-data:
+  elasticsearch-data:

@@ -2,29 +2,26 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Confluent.Kafka;
 using KafkaConsumerDemo.StandardizeModels;
+using Serilog;
 
 namespace KafkaConsumerDemo.Services
 {
   public class KafkaOrderPaymentConsumerService : BackgroundService
   {
-    private readonly ILogger<KafkaOrderPaymentConsumerService> _logger;
     private readonly ConsumerConfig _consumerConfig;
-    private readonly string _topic;
     private readonly PostgresSqlService _postgreSqlService;
     private readonly MySqlService _mySqlService;
-
     private readonly ConcurrentBag<OrderPaymentRecord> _batchRecords = new();
     private readonly SemaphoreSlim _batchSemaphore = new(1, 1);
-    private readonly int _batchSize = 2000;
+    private readonly string _topic;
+    private readonly int _batchSize = 1000;
     private readonly TimeSpan _batchInterval = TimeSpan.FromSeconds(30);
 
     public KafkaOrderPaymentConsumerService(
-        ILogger<KafkaOrderPaymentConsumerService> logger,
         IConfiguration configuration,
         PostgresSqlService postgreSqlService,
         MySqlService mySqlService)
     {
-      _logger = logger;
       _topic = configuration["Kafka:OrderPaymentTopic"] ?? throw new ArgumentNullException("Kafka:OrderPaymentTopic");
       _consumerConfig = new ConsumerConfig
       {
@@ -63,24 +60,24 @@ namespace KafkaConsumerDemo.Services
                 {
                   _batchRecords.Add(record);
                   consumer.Commit(result);
-                  _logger.LogInformation("Added record to batch: {OrderId}", record.OrderId);
+                  Log.Information("Message consumed: {OrderId}", record.OrderId);
                 }
               }
             }
             catch (Exception ex)
             {
-              _logger.LogError(ex, "An error occurred while processing the message.");
+              Log.Error(ex, "Error occurred while consuming message: {Message}", ex.Message);
             }
           }
         }
         catch (Exception ex)
         {
-          _logger.LogError(ex, "An error occurred in the Kafka consumer loop.");
+          Log.Error(ex, "An error occurred in the Kafka consumer loop: {Message}", ex.Message);
         }
         finally
         {
           consumer.Close();
-          _logger.LogInformation("Kafka consumer closed.");
+          Log.Information("Consumer closed.");
         }
       }
 
@@ -111,7 +108,7 @@ namespace KafkaConsumerDemo.Services
 
               if (recordsToProcess.Count > 0)
               {
-                _logger.LogInformation("Processing batch of {Count} records.", recordsToProcess.Count);
+                Log.Information("Processing batch of {Count} records.", recordsToProcess.Count);
 
                 // Insert into PostgreSQL
                 await _postgreSqlService.InsertOrderPaymentsAsync(recordsToProcess);
@@ -119,7 +116,7 @@ namespace KafkaConsumerDemo.Services
                 // Insert into MySQL
                 await _mySqlService.InsertOrderPaymentsAsync(recordsToProcess);
 
-                _logger.LogInformation("Batch processed successfully.");
+                Log.Information("Batch processed successfully.");
               }
             }
             finally
@@ -128,13 +125,9 @@ namespace KafkaConsumerDemo.Services
             }
           }
         }
-        catch (OperationCanceledException)
-        {
-          _logger.LogInformation("Batch processing was canceled.");
-        }
         catch (Exception ex)
         {
-          _logger.LogError(ex, "An error occurred while processing the batch.");
+          Log.Error(ex, "An error occurred while processing the batch: {Message}", ex.Message);
         }
       }
     }

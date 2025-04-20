@@ -2,13 +2,13 @@ using Confluent.Kafka;
 using KafkaProducerDemo.StandardizeModels;
 using MySql.Data.MySqlClient;
 using Npgsql;
+using Serilog;
 using System.Text.Json;
 
 namespace KafkaProducerDemo.Services
 {
   public class OrderPaymentService
   {
-    private readonly ILogger<OrderPaymentService> _logger;
     private KafkaProducerService _kafkaProducerService;
     private readonly string _postgresConnectionString;
     private readonly string _postgresConnectionString2;
@@ -17,10 +17,9 @@ namespace KafkaProducerDemo.Services
     private readonly string _mySqlConnectionString2;
     private readonly string _topic = "order_payment_topic";
     private readonly int _offsetStart;
-    private readonly int _comparedBatchSize = 40000;
+    private readonly int _comparedBatchSize = 50000;
     public OrderPaymentService(IConfiguration configuration, KafkaProducerService kafkaProducerService, ILogger<OrderPaymentService> logger)
     {
-      _logger = logger ?? throw new ArgumentNullException(nameof(logger));
       _kafkaProducerService = kafkaProducerService;
       _postgresConnectionString = configuration.GetSection("PostgreSql:ConnectionString").Value ?? throw new ArgumentNullException("PostgreSql:ConnectionString", "PostgreSQL connection string is not configured.");
       _postgresConnectionString2 = configuration.GetSection("PostgreSql:ConnectionString2").Value ?? throw new ArgumentNullException("PostgreSql:ConnectionString2", "PostgreSQL connection string 2 is not configured.");
@@ -32,11 +31,11 @@ namespace KafkaProducerDemo.Services
 
     public async Task ProcessAndSendDataAsync()
     {
-      const int batchSize = 10000;
+      const int batchSize = 500;
       var offset = _offsetStart;
       var totalRecords = 0;
 
-      while (true)
+      while (totalRecords < _comparedBatchSize)
       {
         var records = await GetOrderPaymentDataAsync(_postgresConnectionString, offset, batchSize);
         if (records.Count == 0) break;
@@ -46,14 +45,8 @@ namespace KafkaProducerDemo.Services
           );
 
         await Task.WhenAll(tasks);
-        Console.WriteLine($"Success count: {_kafkaProducerService.GetSuccessCount()}");
-        Console.WriteLine($"Failed count: {_kafkaProducerService.GetFailedCount()}");
+        Log.Information($"Processed {records.Count} records from PostgreSQL and sent to Kafka topic {_topic}.");
         totalRecords += records.Count;
-        if (totalRecords >= _comparedBatchSize)
-        {
-          Console.WriteLine($"Processed {totalRecords} records. Stop here.");
-          break;
-        }
         offset += batchSize;
       }
     }
@@ -96,7 +89,7 @@ namespace KafkaProducerDemo.Services
         });
       }
       var endTime = DateTime.UtcNow;
-      _logger.LogInformation($"GetOrderPaymentDataAsync took {endTime - startTime} seconds to fetch {records.Count} records from PostgreSQL.");
+      Log.Information($"GetOrderPaymentDataAsync took {endTime - startTime} seconds to fetch {records.Count} records from PostgreSQL.");
       return records;
     }
 
@@ -160,7 +153,7 @@ namespace KafkaProducerDemo.Services
         });
       }
       var endTime = DateTime.UtcNow;
-      _logger.LogInformation($"GetOrderPaymentDataMySqlAsync took {endTime - startTime} seconds to fetch {records.Count} records from MySQL.");
+      Log.Information($"GetOrderPaymentDataMySqlAsync took {endTime - startTime} seconds to fetch {records.Count} records from MySQL.");
       return records;
     }
 

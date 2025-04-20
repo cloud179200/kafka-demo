@@ -22,18 +22,23 @@ interface ComparisonChartProps {
 }
 
 const ComparisonChart: React.FC<ComparisonChartProps> = ({ data }) => {
-  console.log({ data })
+  // const maxRecordNotSync = Math.max(
+  //   data.listRecordNotSyncPostgreSql1.length,
+  //   data.listRecordNotSyncPostgreSql2.length,
+  //   data.listRecordNotSyncMySql1.length,
+  //   data.listRecordNotSyncMySql2.length
+  // );
   const chartData = {
-    labels: ['Nguồn', 'PostgreSQL 1(Cùng group, 2 instance consumer)', 'PostgreSQL 2(1 group, 1 instance consumer)', 'MySQL 1(Cùng group, 2 instance consumer)', 'MySQL 2(1 group, 1 instance consumer)'],
+    labels: ['Database gốc', 'PostgreSQL 1(G-1, 2-Consumer)', 'PostgreSQL 2(G-2, 1-Consumer)', 'MySQL 1(G-1, 2-Consumer)', 'MySQL 2(G-2, 1-Consumer)'],
     datasets: [
       {
         label: 'Phần trăm đồng bộ dữ liệu',
         data: [
-          data.percentSource / 10,
-          data.percentPostgreSql1 / 10,
-          data.percentPostgreSql2 / 10,
-          data.percentMySql1 / 10,
-          data.percentMySql2 / 10,
+          data.percentSource,
+          data.percentPostgreSql1,
+          data.percentPostgreSql2,
+          data.percentMySql1,
+          data.percentMySql2,
         ],
         backgroundColor: ['#2980b9', '#4caf50', '#2196f3', '#ff9800', '#f44336'],
       },
@@ -59,7 +64,7 @@ const ComparisonChart: React.FC<ComparisonChartProps> = ({ data }) => {
       },
       title: {
         display: true,
-        text: 'So sánh đồng bộ dữ liệu',
+        text: 'Kết quả đồng bộ dữ liệu',
       },
       datalabels: {
         display: true,

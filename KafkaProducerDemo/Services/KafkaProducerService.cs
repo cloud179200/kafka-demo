@@ -1,6 +1,7 @@
 ﻿using Confluent.Kafka;
 using KafkaProducerDemo.StandardizeModels;
 using Npgsql;
+using Serilog;
 using System.Text.Json;
 
 namespace KafkaProducerDemo.Services
@@ -20,7 +21,9 @@ namespace KafkaProducerDemo.Services
             var config = new ProducerConfig
             {
                 BootstrapServers = _bootstrapServers,
-                Acks = Acks.All
+                Acks = Acks.All,
+                MessageSendMaxRetries = 5,
+                RetryBackoffMs = 1000
             };
 
             try
@@ -31,13 +34,14 @@ namespace KafkaProducerDemo.Services
                     Key = key,
                     Value = value
                 });
+                producer.Flush(TimeSpan.FromSeconds(10));
                 _successCount++;
-                Console.WriteLine($"Message sent to topic {result.Topic}, partition {result.Partition}, offset {result.Offset}");
+                Log.Information($"Message sent to topic {result.Topic}, partition {result.Partition}, offset {result.Offset}");
             }
             catch (Exception ex)
             {
                 _failedCount++;
-                Console.WriteLine($"Unexpected error: {ex.Message}");
+                Log.Error($"Failed to send message to Kafka: {ex.Message}");
             }
         }
 

@@ -56,7 +56,7 @@ export default function Home() {
       ) : (
         <div className="w-full max-w-6xl bg-white shadow-lg rounded-lg p-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-            So sánh đồng bộ dữ liệu
+            Kết quả
           </h1>
           <ComparisonChart data={data} />
         </div>

@@ -1,20 +1,18 @@
 ﻿using Confluent.Kafka;
+using Serilog;
 
 namespace KafkaConsumerDemo.Services
 {
     public class KafkaConsumerService : BackgroundService
     {
-        private readonly ILogger<KafkaConsumerService> _logger;
         private readonly PostgresSqlService _postgreSqlService;
         private readonly ConsumerConfig _consumerConfig;
         private readonly string _topic;
 
         public KafkaConsumerService(
-            ILogger<KafkaConsumerService> logger,
             PostgresSqlService postgreSqlService,
             IConfiguration configuration)
         {
-            _logger = logger;
             _postgreSqlService = postgreSqlService;
             _topic = configuration["Kafka:Topic"] ?? throw new ArgumentNullException("Kafka:Topic");
             _consumerConfig = new ConsumerConfig
@@ -32,13 +30,13 @@ namespace KafkaConsumerDemo.Services
             {
                 using var consumer = new ConsumerBuilder<Ignore, string>(_consumerConfig)
                     .SetPartitionsAssignedHandler((c, partitions) =>
-                        _logger.LogInformation($"Partitions assigned: [{string.Join(", ", partitions)}]"))
+                        Log.Information($"Partitions assigned: [{string.Join(", ", partitions)}]"))
                     .SetPartitionsRevokedHandler((c, partitions) =>
-                        _logger.LogWarning("Partitions revoked."))
+                        Log.Information($"Partitions revoked: [{string.Join(", ", partitions)}]"))
                     .Build();
 
                 consumer.Subscribe(_topic);
-                _logger.LogInformation("Subscribed to topic: {Topic}", _topic);
+                Log.Information($"Subscribed to topic: {_topic}");
 
                 try
                 {
@@ -52,7 +50,7 @@ namespace KafkaConsumerDemo.Services
                             if (!string.IsNullOrWhiteSpace(message))
                             {
                                 var logMessage = $"Received message: {message} at {DateTime.UtcNow}";
-                                _logger.LogInformation(logMessage);
+                                Log.Information(logMessage);
 
                                 // Save the log message to PostgreSQL
                                 await _postgreSqlService.SaveLogAsync(logMessage);
@@ -60,28 +58,28 @@ namespace KafkaConsumerDemo.Services
                         }
                         catch (ConsumeException ex)
                         {
-                            _logger.LogError(ex, $"Consume error: {ex.Error.Reason}");
+                            Log.Error(ex, $"Error occurred while consuming message: {ex.Error.Reason}");
                         }
                     }
                 }
                 catch (OperationCanceledException)
                 {
-                    _logger.LogInformation("Consumer cancellation requested.");
+                    Log.Information("Consumer operation canceled.");
                 }
                 catch (KafkaException ex)
                 {
-                    _logger.LogError(ex, "Kafka error occurred. Retrying in 5 seconds...");
+                    Log.Error(ex, $"Kafka error occurred: {ex.Error.Reason}");
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unexpected error occurred. Retrying in 5 seconds...");
+                    Log.Error(ex, "An unexpected error occurred.");
                     await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
                 }
                 finally
                 {
                     consumer.Close();
-                    _logger.LogInformation("Consumer closed.");
+                    Log.Information("Consumer closed.");
                 }
             }
         }
